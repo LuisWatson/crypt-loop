@@ -53,6 +53,9 @@ body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);
 .prompt span{font-family:var(--f-body);font-size:15px}
 
 .hurt{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,var(--hp) 130%)}
+.dmg{position:absolute;left:0;top:0;opacity:0;transform:translate(-50%,-50%);font-family:var(--f-pixel);font-size:14px;color:#fff;text-shadow:2px 2px 0 var(--shadow);white-space:nowrap;will-change:transform,opacity}
+.dmg.kill{color:var(--gold);font-size:19px}
+.dmg.hurt{color:var(--hp);font-size:22px}
 .toast{position:absolute;left:50%;top:24%;transform:translateX(-50%);font-family:var(--f-pixel);font-size:clamp(18px,4vw,30px);color:var(--gold);text-shadow:3px 3px 0 var(--shadow);pointer-events:none;opacity:0;transition:opacity .3s;text-align:center;width:min(90vw,640px)}
 .toast small{display:block;font-family:var(--f-body);font-size:15px;color:var(--ink);text-wrap:balance}
 .toast.on{opacity:1}
@@ -118,6 +121,7 @@ h2{font-family:var(--f-pixel);font-size:26px;margin:0;color:var(--xp);text-shado
 
 <div id="game">
   <div class="labels" id="labels"></div>
+  <div class="labels" id="dmgs"></div>
   <div class="hurt" id="hurt"></div>
 
   <div class="hud" id="dhud" hidden>
@@ -830,11 +834,13 @@ const eligible = () => UPG.filter(u => (!u.cls || u.cls.includes(S.cls)) && (S.p
 
 /* ================= state ================= */
 let cur = town, curCol = townCol;
-let enemies = [], bullets = [], ebullets = [], gems = [], parts = [], blades = [], slashes = [];
+let enemies = [], bullets = [], ebullets = [], gems = [], parts = [], blades = [], slashes = [], dying = [];
+let hitStop = 0, lastBossStop = 0; // seconds of frozen simulation / last boss-hit freeze time
 let S = null, mode = 'title', shake = 0, hurtA = 0, faceAngle = 0, opts = [], nearSpot = null, shopId = null, resetArm = false;
 let goldShown = save.gold, goldTween = null;
 const bulletGeo = G(.24, .24, .24), bulletMat = GLOW(0x9ff7ff, 2.2), arrowGeo = G(.07, .07, .55), ebGeo = G(.3, .3, .3), ebMat = GLOW(0xff3d6e, 2.2);
 const gemGeo = new THREE.OctahedronGeometry(.17, 0), gemMat = GLOW(0x4fd8c8, 1.8), gemBig = GLOW(0xf2b445, 1.8);
+const trailGeo = G(.15, .15, 1), trailMat = GLOW(0x9ff7ff, 3), arrowTrailGeo = G(.07, .07, .9), arrowTrailMat = GLOW(0xe8d8b0, 2.4);
 const pGeo = G(.14, .14, .14), pMats = {};
 const pMat = c => pMats[c] || (pMats[c] = B(c));
 
@@ -891,7 +897,7 @@ function addEnemy(type, x, z) {
   const e = {
     type, g: m.g, mat: m.mat, p: m.p, x, z, hp: d.hp * hpMul, maxHp: d.hp * hpMul, speed: d.speed * (type === 'boss' ? 1 : rand(.9, 1.1)),
     r: d.r, dmg: d.dmg, xp: d.xp, kb: d.kb, color: d.color, seed: rand(0, 10),
-    flash: 0, oCd: 0, spawnT: .45, baseY: type === 'bat' ? 1.1 : 0, scale: type === 'boss' ? 1.6 : 1, atk: 2.5, sum: 6, phase: 0
+    flash: 0, oCd: 0, dmgAt: -1, spawnT: .45, baseY: type === 'bat' ? 1.1 : 0, scale: type === 'boss' ? 1.6 : 1, atk: 2.5, sum: 6, phase: 0
   };
   e.g.position.set(x, e.baseY, z);
   e.g.scale.setScalar(.01);
@@ -936,8 +942,17 @@ function hurt(e, dmg, kx, kz) {
   if (e.dead || S.won) return;
   e.hp -= dmg; e.flash = .08; e.mat.emissive.setHex(0xffffff);
   e.x += kx; e.z += kz;
-  if (e.hp > 0) { audio.play('hit'); return; }
+  const now = clock.elapsedTime, top = e.type === 'boss' ? 3.8 : e.type === 'golem' ? 2.4 : e.baseY + .9;
+  if (e.hp > 0) {
+    audio.play('hit');
+    // one number per enemy per 0.1 s: blades and multi-shots would otherwise flood the pool
+    if (now - e.dmgAt > .1) { e.dmgAt = now; dmgNum(e.x, top, e.z, Math.max(1, Math.round(dmg)), ''); }
+    if (e.type === 'boss' && now - lastBossStop > .3) { lastBossStop = now; hitStop = Math.max(hitStop, .035); }
+    return;
+  }
+  dmgNum(e.x, top, e.z, Math.max(1, Math.round(dmg)), 'kill');
   audio.play(e.type === 'golem' || e.type === 'boss' ? 'bigKill' : 'kill');
+  if (e.type === 'golem' || e.type === 'boss') hitStop = Math.max(hitStop, e.type === 'boss' ? .16 : .09);
   e.dead = true; S.kills++;
   burst(e.x, e.baseY + .4, e.z, e.color, e.type === 'boss' ? 40 : e.type === 'golem' ? 22 : 9, e.type === 'boss' ? 2 : 1);
   dropGem(e.x, e.z, e.xp);
@@ -955,6 +970,8 @@ function damagePlayer(n) {
   if (S.won) return;
   S.hp -= n; S.inv = .7; shake = .35; hurtA = .6;
   audio.play('hurt');
+  dmgNum(player.position.x, 1.9, player.position.z, '-' + n, 'hurt');
+  hitStop = Math.max(hitStop, .07);
   burst(player.position.x, .8, player.position.z, 0xe24a5d, 6);
   if (S.hp <= 0) {
     S.hp = 0;
@@ -994,7 +1011,10 @@ function fireAt(base, n, spread, arrow) {
     m.position.set(px, .9, pz);
     if (arrow) m.rotation.y = a;
     cur.add(m);
-    bullets.push({ m, arrow, x: px, z: pz, vx: Math.sin(a) * sp, vz: Math.cos(a) * sp, sp, life: arrow ? .8 : 1.1, pierce: S.pierce, hit: new Set() });
+    const tr = new THREE.Mesh(arrow ? arrowTrailGeo : trailGeo, arrow ? arrowTrailMat : trailMat);
+    tr.position.set(px, .9, pz); tr.rotation.y = a;
+    cur.add(tr);
+    bullets.push({ m, tr, arrow, x: px, z: pz, vx: Math.sin(a) * sp, vz: Math.cos(a) * sp, sp, life: arrow ? .8 : 1.1, pierce: S.pierce, hit: new Set() });
   }
 }
 function swing() {
@@ -1174,6 +1194,24 @@ const labelEls = spots.map(s => {
   return el;
 });
 const v3 = new THREE.Vector3();
+
+// floating damage numbers: a fixed pool of DOM nodes, animated with WAAPI and recycled round-robin
+const dmgPool = [];
+for (let i = 0; i < 32; i++) { const el = document.createElement('div'); el.className = 'dmg'; $('dmgs').appendChild(el); dmgPool.push(el); }
+let dmgI = 0;
+function dmgNum(x, y, z, text, cls) {
+  v3.set(x, y, z).project(camera);
+  if (v3.z > 1) return;
+  const el = dmgPool[dmgI++ % dmgPool.length];
+  if (el._a) el._a.cancel();
+  el.className = 'dmg ' + cls;
+  el.textContent = text;
+  el.style.left = ((v3.x + 1) / 2 * host.clientWidth) + 'px';
+  el.style.top = ((1 - v3.y) / 2 * host.clientHeight) + 'px';
+  el._a = el.animate(
+    [{ transform: 'translate(-50%,-50%) scale(1.3)', opacity: 1 }, { transform: 'translate(-50%,-200%) scale(.9)', opacity: 0 }],
+    { duration: cls === 'kill' ? 750 : 550, easing: 'ease-out', fill: 'forwards' });
+}
 function updateLabels() {
   const show = cur === town && mode !== 'title';
   ui.labels.hidden = !show;
@@ -1313,10 +1351,12 @@ function togglePause() {
 function clearAll() {
   for (const e of enemies) { e.g.parent && e.g.parent.remove(e.g); e.mat.dispose(); }
   for (const arr of [bullets, ebullets, gems]) for (const b of arr) b.m.parent && b.m.parent.remove(b.m);
+  for (const b of bullets) b.tr.parent && b.tr.parent.remove(b.tr);
+  for (const d of dying) { d.g.parent && d.g.parent.remove(d.g); d.mat.dispose(); }
   for (const p of parts) p.o.parent && p.o.parent.remove(p.o);
   for (const s of slashes) { s.g.parent && s.g.parent.remove(s.g); s.geo.dispose(); s.mat.dispose(); }
   for (const m of blades) m.parent && m.parent.remove(m);
-  enemies = []; bullets = []; ebullets = []; gems = []; parts = []; slashes = []; blades = [];
+  enemies = []; bullets = []; ebullets = []; gems = []; parts = []; slashes = []; blades = []; dying = [];
 }
 function goTown(coins) {
   clearAll();
@@ -1367,7 +1407,7 @@ function startRun() {
   hideScreens();
   ui.thud.hidden = true; ui.prompt.hidden = true; ui.dhud.hidden = false; ui.bossbar.hidden = true;
   ui.floorlbl.textContent = 'FLOOR ' + fl;
-  lastHud = ''; lastSk = '';
+  lastHud = ''; lastSk = ''; hitStop = 0;
   audio.music('dungeon');
   lastMove.x = 0; lastMove.z = 1;
   blurFocus();
@@ -1492,6 +1532,7 @@ const DB = { x0: -A + .4, x1: A - .4, z0: -A + .4, z1: A - .4 };
 function update(dt) {
   if (S.won) {
     S.endT -= dt;
+    reapEnemies();
     for (const g of gems) { g.x += (player.position.x - g.x) * Math.min(1, dt * 4); g.z += (player.position.z - g.z) * Math.min(1, dt * 4); g.m.position.set(g.x, .4, g.z); }
     movePlayer(dt, S.speed, DB);
     if (S.endT <= 0) endRun(true);
@@ -1514,6 +1555,7 @@ function update(dt) {
   for (const b of bullets) {
     b.x += b.vx * dt; b.z += b.vz * dt; b.life -= dt;
     b.m.position.set(b.x, .9, b.z);
+    b.tr.position.set(b.x - b.vx / b.sp * .55, .9, b.z - b.vz / b.sp * .55);
     if (!b.arrow) { b.m.rotation.y += dt * 12; b.m.rotation.x += dt * 9; }
     if (b.life <= 0 || Math.abs(b.x) > A || Math.abs(b.z) > A || inBox(b.x, b.z, dungCol)) { b.dead = true; continue; }
     for (const e of enemies) {
@@ -1531,7 +1573,7 @@ function update(dt) {
       }
     }
   }
-  bullets = bullets.filter(b => b.dead ? (cur.remove(b.m), false) : true);
+  bullets = bullets.filter(b => b.dead ? (cur.remove(b.m), cur.remove(b.tr), false) : true);
 
   // enemy projectiles
   for (const b of ebullets) {
@@ -1597,7 +1639,7 @@ function update(dt) {
     if (e.flash > 0) { e.flash -= dt; if (e.flash <= 0) e.mat.emissive.setHex(0); }
     animEnemy(e);
   }
-  enemies = enemies.filter(e => e.dead ? (cur.remove(e.g), e.mat.dispose(), false) : true);
+  reapEnemies();
   if (S.boss) ui.bossfill.style.width = Math.max(0, S.boss.hp / S.boss.maxHp * 100) + '%';
 
   // spawning
@@ -1633,6 +1675,15 @@ function update(dt) {
   gems = gems.filter(g => !g.dead);
 }
 
+// dead enemies squash flat in updateFx() and are only removed/disposed when that animation ends
+function reapEnemies() {
+  enemies = enemies.filter(e => {
+    if (!e.dead) return true;
+    const dur = e.type === 'boss' ? .6 : .22;
+    dying.push({ g: e.g, mat: e.mat, sx: e.g.scale.x, sy: e.g.scale.y, sz: e.g.scale.z, t: dur, dur });
+    return false;
+  });
+}
 function bossAct(e, dt) {
   const enraged = e.hp < e.maxHp / 2;
   e.atk -= dt;
@@ -1681,6 +1732,12 @@ function animEnemy(e) {
 }
 
 function updateFx(dt) {
+  for (const d of dying) {
+    d.t -= dt;
+    const k = 1 - Math.max(0, d.t) / d.dur;
+    d.g.scale.set(d.sx * (1 + .5 * k), Math.max(.02, d.sy * (1 - k)), d.sz * (1 + .5 * k));
+  }
+  dying = dying.filter(d => d.t > 0 ? true : (d.g.parent && d.g.parent.remove(d.g), d.mat.dispose(), false));
   for (const p of parts) {
     p.vy -= 18 * dt;
     p.o.position.x += p.vx * dt; p.o.position.y += p.vy * dt; p.o.position.z += p.vz * dt;
@@ -1757,10 +1814,13 @@ camTarget.set(0, 0, 3.5);
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05);
-  if (mode === 'play') update(dt);
-  else if (mode === 'town') updateTown(dt);
+  let fdt = dt;
+  if (mode === 'play') {
+    if (hitStop > 0) { hitStop -= dt; fdt = dt * .2; } // hit-stop: freeze the simulation, effects crawl
+    else update(dt);
+  } else if (mode === 'town') updateTown(dt);
   else if (mode === 'title') player.rotation.y += dt * .6;
-  updateFx(dt);
+  updateFx(fdt);
   hud(); skillUi();
   camTarget.lerp(player.position, 1 - Math.exp(-dt * 6));
   camTarget.y = 0;
@@ -1780,10 +1840,11 @@ frame();
 
 /* test hook: only exists when the page is opened with ?dbg (see CLAUDE.md) */
 if (/[?&]dbg\b/.test(location.search)) window.__dbg = {
-  startRun, useSkill, spawnBoss, addEnemy, save, player, ui, camera, audio,
+  startRun, useSkill, spawnBoss, addEnemy, hurt, save, player, ui, camera, audio, dmgPool,
   tick(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'play') update(1 / 30); updateFx(1 / 30); } hud(); skillUi(); },
   setCls(c) { save.cls = c; setHero(c); },
-  get S() { return S; }, get mode() { return mode; }, get nb() { return bullets.length; }, get enemies() { return enemies; }
+  get S() { return S; }, get mode() { return mode; }, get nb() { return bullets.length; }, get enemies() { return enemies; },
+  get dying() { return dying.length; }, get hitStop() { return hitStop; }, get sceneKids() { return cur.children.length; }
 };
 })();
 </script>
