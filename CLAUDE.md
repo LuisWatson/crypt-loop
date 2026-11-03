@@ -1,0 +1,36 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Crypt Loop: a 3D pixel-art roguelite that runs in the browser. The whole game is one file, `crypt-loop.html` (HTML + CSS + one inline IIFE script). There is no build step, no package.json, no tests, and no linter. `ROADMAP.md` tracks planned work and known issues. Update its checkboxes when an item ships.
+
+The UI text is in Thai, while the code, comments and commit messages are in English. The user reads replies in Thai.
+
+## Running
+
+- Players open `crypt-loop.html` directly in a browser (double-click). It needs internet because Three.js **r128** loads from cdnjs. Keep it pinned to that version: the code relies on r128 APIs (`renderer.capabilities.isWebGL2`, `DepthTexture` + `UnsignedIntType`, `shadowMap.autoUpdate`).
+- To test in Claude's browser pane, serve the folder (`python -m http.server 8765`) and open `http://localhost:8765/crypt-loop.html`. Opening the file through `file://` is refused there.
+- While the browser pane is hidden, `requestAnimationFrame` stops. The game then doesn't advance, `nearSpot` and other per-frame state goes stale, and FPS reads 0. To drive the game for a test, add a temporary hook just after `frame();`. Example: `window.__dbg = { startRun, spawnBoss, addEnemy, tick(n){ for(...) { update(1/30); updateFx(1/30); } }, get S(){ return S; } }`. Then call it from `javascript_exec` and take screenshots. Screenshots force a render. **Remove the hook before committing or publishing.**
+- The game is also published as a private claude.ai artifact (`https://claude.ai/artifact/1wW889Uma1Rn2zmDqZEyRs`). After changes, republish this file to that URL. The artifact host wraps the page in its own doctype/head and enforces a CDN allowlist (scripts only from cdnjs/jsdelivr/unpkg, fonts only from Google Fonts). The file keeps its own `<meta charset>` and `[hidden]{display:none!important}` so it also works opened locally.
+
+## Architecture (inside the single script)
+
+The script is split by `/* ===== name ===== */` banners. The parts that interact:
+
+- **Modes**: the global `mode` drives everything. It is one of `title`, `town`, `shop`, `play`, `level`, `pause` or `summary`. `frame()` runs `update()` only in `play` and `updateTown()` only in `town`. Overlay screens (`#title`, `#shop`, `#level`, `#pause`, `#summary`) are toggled with `el.hidden`.
+- **Two scenes**: `town` and `dung` are separate `THREE.Scene`s, each with its own lights and collider list (`townCol`, `dungCol`, made of AABBs `{x,z,hx,hz}`). `cur` and `curCol` point at the active one. `goTown()` and `startRun()` switch scenes. They call `clearAll()` first and re-parent the shared `player` group. Anything spawned mid-run must be added to `cur` and tracked in one of the entity arrays (`enemies`, `bullets`, `ebullets`, `gems`, `parts`, `slashes`, `blades`), or `clearAll()` will leak it.
+- **Run state vs save state**: `S` is per-run state (stats, timers, picks, boss), rebuilt in `startRun()` from `CLS[save.cls]` plus the permanent upgrades. `save` is persistent (gold, `up`, `unlocked`, `depth`, `floor`) and lives in localStorage under `crypt-loop-save-v1`. `loadSave()` merges onto `defSave()`, so you can add new fields without breaking old saves. If the structure changes incompatibly, bump the key.
+- **Data tables**: tuning lives in tables near the "content" banner. `CLS` holds class base stats and the weapon type (`bolt`, `slash` or `arrow`). `META` holds town upgrades with their cost and effect functions. `DEF` holds enemy stats. `UPG` holds level-up powers; the optional `cls` array limits a power to some classes, and `apply()` mutates `S`. `BOSS_T` sets the boss timer. Scaling helpers: `floorHp(n)`, `floorGold(n)`, `floorInfo(n)`. The gold formula is in `endRun()`.
+- **Weapons**: `S.weapon` picks `shoot()` (bolt/arrow projectiles) or `swing()` (knight arc). Knight hits are checked by angle against `S.arc` and `S.reach`. The visible slash is a `RingGeometry`, disposed after 0.16 s.
+- **Boss**: an entry in `enemies` with `type: 'boss'`, also kept in `S.boss`. Its attacks are in `bossAct()`. When it dies, `hurt()` calls `victory()`. That sets `S.won` and starts a short end timer, then `endRun(true)` runs.
+- **Rendering / post-processing**: everything renders at low resolution (about 300 px; see `resize()`), and the canvas is upscaled with `image-rendering: pixelated`. On WebGL2, `post.render()` does the following: an HDR colour pass with depth, then a `MeshNormalMaterial` override pass, then an outline shader (depth edges darken, normal edges highlight), then a bright-pass with 2× separable blur for bloom, then the final tonemap and vignette. Without WebGL2 it falls back to a plain `renderer.render`. `shadowMap.autoUpdate` is off, and `post.render` sets `needsUpdate` once per frame, so shadows don't re-render in the normal pass.
+- **Glow**: bloom only picks up colours above 1.0. To make something glow, build its material with `GLOW(color, k)` (or call `material.color.multiplyScalar(k)`) rather than `B(color)`. The final pass divides by the max channel, so the hue is kept.
+- **Models**: all models are made from `box()` calls with cached geometry (`G`). Heroes come from `HERO[cls]()` and are swapped with `setHero()`. Enemies come from `makeEnemy(type)`. Town buildings come from the `BLD` table, which also creates their colliders, interaction `spots` and floating HTML labels.
+- **Input**: keyboard (`keys` set; E interacts, P/Esc pauses, 1–3 picks a card) plus a pointer-drag virtual joystick (`joy`) in both `town` and `play`. The `#prompt` button is the touch stand-in for E.
+
+## Repo notes
+
+- Remote: `origin` is `https://github.com/LuisWatson/crypt-loop.git` (the user's personal account). This repo has a local `user.email` set to the user's personal Gmail. Don't change it to the global work identity.
+- Commit messages end with the `Co-Authored-By: Claude …` trailer.
