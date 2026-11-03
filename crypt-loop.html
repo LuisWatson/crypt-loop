@@ -37,6 +37,13 @@ body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);
 .hudbtn{pointer-events:auto;font-family:var(--f-pixel);font-size:12px;background:var(--panel2);color:var(--ink);border:0;box-shadow:0 0 0 2px var(--shadow);padding:6px 9px;cursor:pointer}
 .hudbtn:focus-visible,.btn:focus-visible,.card:focus-visible,.chip:focus-visible{outline:3px solid var(--xp);outline-offset:3px}
 
+.skillbtn{pointer-events:auto;position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(28px + env(safe-area-inset-bottom,0px));width:76px;height:76px;padding:0;border:0;background:var(--panel2);color:var(--ink);box-shadow:0 0 0 3px var(--line),0 0 0 6px var(--shadow);cursor:pointer;overflow:hidden;font-family:var(--f-pixel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.skillbtn.ready{box-shadow:0 0 0 3px var(--xp),0 0 0 6px var(--shadow)}
+.skillbtn:focus-visible{outline:3px solid var(--xp);outline-offset:6px}
+.skillbtn .sk-name{position:relative;z-index:1;font-size:13px;text-shadow:2px 2px 0 var(--shadow)}
+.skillbtn .sk-key{position:relative;z-index:1;font-size:9px;color:var(--dim)}
+.skillbtn .sk-cd{position:absolute;left:0;bottom:0;width:100%;height:0;background:rgba(12,9,18,.72)}
+
 .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .lbl{position:absolute;transform:translate(-50%,-100%);font-size:13px;line-height:1.2;white-space:nowrap;background:rgba(12,9,18,.78);padding:3px 8px;box-shadow:0 0 0 2px var(--shadow);text-align:center}
 .lbl b{display:block;font-family:var(--f-pixel);font-weight:400;font-size:10px;color:var(--gold);letter-spacing:.06em}
@@ -124,6 +131,7 @@ h2{font-family:var(--f-pixel);font-size:26px;margin:0;color:var(--xp);text-shado
       <div class="right"><span><span class="gold" id="kills">0</span> KILLS</span><button class="hudbtn" id="pausebtn" aria-label="พักเกม">II</button></div>
     </div>
     <div class="bossbar" id="bossbar" hidden><span>BONE KING</span><div class="bar"><i id="bossfill"></i></div></div>
+    <button class="skillbtn" id="skillbtn" type="button" aria-label="ท่าพิเศษ"><span class="sk-name" id="skname">SKILL</span><span class="sk-key">SPACE</span><i class="sk-cd" id="skcd"></i></button>
   </div>
 
   <div class="hud" id="thud" hidden>
@@ -146,6 +154,7 @@ h2{font-family:var(--f-pixel);font-size:26px;margin:0;color:var(--xp);text-shado
         <b>WASD</b><span>เดิน (หรือปุ่มลูกศร / ลากนิ้วบนจอ)</span>
         <b>E</b><span>ใช้อาคารในเมือง</span>
         <b>AUTO</b><span>ตัวละครโจมตีศัตรูใกล้สุดเอง</span>
+        <b>SPACE</b><span>ท่าพิเศษของอาชีพ (มือถือ: ปุ่มมุมขวาล่าง)</span>
         <b>P / ESC</b><span>พักเกม</span>
       </div>
       <button class="btn" id="enterbtn"><span>เข้าเมือง</span></button>
@@ -632,9 +641,9 @@ function setHero(cls) {
 
 /* ================= content ================= */
 const CLS = {
-  mage:   { en: 'MAGE', th: 'จอมเวท', desc: 'ยิงเวทใส่ศัตรูใกล้สุด สมดุลทุกด้าน', hp: 10, speed: 5, dmg: 2, rate: 1.6, weapon: 'bolt', cost: 0 },
-  knight: { en: 'KNIGHT', th: 'อัศวิน', desc: 'ฟันรอบตัวระยะใกล้ HP เยอะ ต้องเข้าไปประชิด', hp: 16, speed: 4.6, dmg: 3.2, rate: 1.15, weapon: 'slash', cost: 0 },
-  ranger: { en: 'RANGER', th: 'นักธนู', desc: 'ธนูทะลุ 2 ตัว ยิงไกล เดินเร็ว แต่ HP น้อย', hp: 7, speed: 5.8, dmg: 1.6, rate: 2, weapon: 'arrow', cost: 150 }
+  mage:   { en: 'MAGE', th: 'จอมเวท', desc: 'ยิงเวทใส่ศัตรูใกล้สุด สมดุลทุกด้าน', hp: 10, speed: 5, dmg: 2, rate: 1.6, weapon: 'bolt', cost: 0, skill: { id: 'blink', en: 'BLINK', th: 'วาร์ปไปข้างหน้า + ระเบิดตอนถึง', cd: 6 } },
+  knight: { en: 'KNIGHT', th: 'อัศวิน', desc: 'ฟันรอบตัวระยะใกล้ HP เยอะ ต้องเข้าไปประชิด', hp: 16, speed: 4.6, dmg: 3.2, rate: 1.15, weapon: 'slash', cost: 0, skill: { id: 'charge', en: 'CHARGE', th: 'พุ่งชาร์จทะลุศัตรู', cd: 5 } },
+  ranger: { en: 'RANGER', th: 'นักธนู', desc: 'ธนูทะลุ 2 ตัว ยิงไกล เดินเร็ว แต่ HP น้อย', hp: 7, speed: 5.8, dmg: 1.6, rate: 2, weapon: 'arrow', cost: 150, skill: { id: 'leap', en: 'LEAP', th: 'ถอยหลัง + ยิงธนู 5 ดอก', cd: 5 } }
 };
 const META = {
   smith:  { en: 'SMITH', th: 'ช่างตีเหล็ก', desc: 'ตีอาวุธให้คมขึ้น ดาเมจเริ่มต้น +10% ต่อเลเวล', max: 10, cost: l => Math.round(60 * Math.pow(1.45, l)), eff: l => `ดาเมจ +${l * 10}%` },
@@ -810,18 +819,21 @@ function shoot() {
   const arrow = S.weapon === 'arrow';
   const tgt = nearest(arrow ? 13 : 11);
   if (!tgt) return false;
-  const px = player.position.x, pz = player.position.z;
-  const base = Math.atan2(tgt.x - px, tgt.z - pz), n = S.multi, sp = arrow ? 20 : 14;
+  const base = Math.atan2(tgt.x - player.position.x, tgt.z - player.position.z);
+  fireAt(base, S.multi, arrow ? .12 : .2, arrow);
+  faceAngle = base;
+  return true;
+}
+function fireAt(base, n, spread, arrow) {
+  const px = player.position.x, pz = player.position.z, sp = arrow ? 20 : 14;
   for (let i = 0; i < n; i++) {
-    const a = base + (i - (n - 1) / 2) * (arrow ? .12 : .2);
+    const a = base + (i - (n - 1) / 2) * spread;
     const m = new THREE.Mesh(arrow ? arrowGeo : bulletGeo, arrow ? M.arrow : bulletMat);
     m.position.set(px, .9, pz);
     if (arrow) m.rotation.y = a;
     cur.add(m);
     bullets.push({ m, arrow, x: px, z: pz, vx: Math.sin(a) * sp, vz: Math.cos(a) * sp, sp, life: arrow ? .8 : 1.1, pierce: S.pierce, hit: new Set() });
   }
-  faceAngle = base;
-  return true;
 }
 function swing() {
   const tgt = nearest(S.reach + 1.4);
@@ -856,6 +868,59 @@ function swing() {
   faceAngle = a;
   return true;
 }
+/* class skill (Space / touch button). Direction comes from the last movement input, not faceAngle,
+   because shoot()/swing() overwrite faceAngle with the auto-aim target. */
+function useSkill() {
+  if (mode !== 'play' || !S || S.won || S.dash || S.skillCd > 0) return;
+  const sk = CLS[S.cls].skill, px = player.position.x, pz = player.position.z;
+  let dx = lastMove.x, dz = lastMove.z;
+  if (sk.id === 'blink') {
+    tmp.x = clamp(px + dx * 5, DB.x0, DB.x1); tmp.z = clamp(pz + dz * 5, DB.z0, DB.z1);
+    pushOut(tmp, .35, curCol);
+    burst(px, 1, pz, 0x9ff7ff, 14);
+    player.position.x = tmp.x; player.position.z = tmp.z;
+    burst(tmp.x, 1, tmp.z, 0x9ff7ff, 14);
+    for (const e of enemies) {
+      if (e.dead || e.spawnT > 0) continue;
+      const ex = e.x - tmp.x, ez = e.z - tmp.z, d = Math.hypot(ex, ez) || .01;
+      if (d < 2.4 + e.r) hurt(e, S.dmg * 1.5, ex / d * e.kb * 3, ez / d * e.kb * 3);
+    }
+    S.inv = Math.max(S.inv, .4);
+    shake = Math.max(shake, .12);
+  } else {
+    if (sk.id === 'leap') {
+      const tgt = nearest(9);
+      if (tgt) {
+        const ax = player.position.x - tgt.x, az = player.position.z - tgt.z, d = Math.hypot(ax, az) || 1;
+        dx = ax / d; dz = az / d;
+        fireAt(Math.atan2(-dx, -dz), 5, .22, true);
+      } else { dx = -dx; dz = -dz; }
+    }
+    const t = sk.id === 'charge' ? .3 : .22, sp = sk.id === 'charge' ? 15 : 25;
+    S.dash = { kind: sk.id, t, vx: dx * sp, vz: dz * sp, dx, dz, hit: new Set() };
+    S.inv = Math.max(S.inv, t + .1);
+  }
+  S.skillCd = sk.cd;
+}
+function dashStep(dt) {
+  const d = S.dash;
+  d.t -= dt;
+  tmp.x = clamp(player.position.x + d.vx * dt, DB.x0, DB.x1);
+  tmp.z = clamp(player.position.z + d.vz * dt, DB.z0, DB.z1);
+  pushOut(tmp, .35, curCol);
+  player.position.x = tmp.x; player.position.z = tmp.z; player.position.y = 0;
+  faceAngle = Math.atan2(d.dx, d.dz);
+  player.rotation.y = faceAngle;
+  if (d.kind === 'charge') {
+    for (const e of enemies) {
+      if (e.dead || e.spawnT > 0 || d.hit.has(e)) continue;
+      const ex = e.x - tmp.x, ez = e.z - tmp.z, rr = e.r + .6;
+      if (ex * ex + ez * ez < rr * rr) { d.hit.add(e); hurt(e, S.dmg * 2.5, d.dx * e.kb * 4, d.dz * e.kb * 4); }
+    }
+    burst(tmp.x, .5, tmp.z, 0xfff2d0, 1);
+  } else burst(tmp.x, .4, tmp.z, 0xe8d8b0, 1);
+  if (d.t <= 0) S.dash = null;
+}
 function syncBlades() {
   while (blades.length < S.orbit) { const m = box(.75, .08, .14, M.blade, 0, .7, 0); cur.add(m); blades.push(m); }
   while (blades.length > S.orbit) { const m = blades.pop(); m.parent && m.parent.remove(m); }
@@ -868,18 +933,24 @@ function gainXp(v) {
 
 /* ================= input ================= */
 const keys = new Set();
+const lastMove = { x: 0, z: 1 };
 const joy = { id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k.startsWith('arrow') || k === ' ') e.preventDefault();
   if (e.repeat) { keys.add(k); return; }
   keys.add(k);
+  if (k === ' ') { if (mode === 'play') useSkill(); return; }
   if ((k === 'p' || k === 'escape') && (mode === 'play' || mode === 'pause')) togglePause();
   else if (k === 'escape' && mode === 'shop') closeShop();
   else if (k === 'e' && mode === 'town' && nearSpot) interact();
   else if (mode === 'level' && '123'.includes(k) && opts[+k - 1]) pick(opts[+k - 1]);
 });
-addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('keyup', e => {
+  keys.delete(e.key.toLowerCase());
+  // a focused button would otherwise "click" on Space keyup and e.g. toggle pause
+  if (e.key === ' ' && mode === 'play') e.preventDefault();
+});
 addEventListener('blur', () => { keys.clear(); if (mode === 'play') togglePause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play') togglePause(); });
 
@@ -909,6 +980,7 @@ host.addEventListener('pointercancel', endJoy);
 const ui = {
   xp: $('xpfill'), hp: $('hpfill'), hpT: $('hptext'), lvl: $('lvl'), time: $('time'), kills: $('kills'), floorlbl: $('floorlbl'),
   bossbar: $('bossbar'), bossfill: $('bossfill'), hurt: $('hurt'), toast: $('toast'),
+  skill: $('skillbtn'), skcd: $('skcd'), skname: $('skname'),
   dhud: $('dhud'), thud: $('thud'), gold: $('goldtxt'), clstxt: $('clstxt'), depthtxt: $('depthtxt'), prompt: $('prompt'), labels: $('labels'),
   title: $('title'), shop: $('shop'), shopbody: $('shopbody'), level: $('level'), pause: $('pause'), summary: $('summary'), cards: $('cards')
 };
@@ -988,7 +1060,7 @@ function renderShop() {
       const act = sel ? 'ใช้อยู่' : un ? 'เลือก' : `ปลดล็อก ${c.cost} ทอง`;
       const dis = sel || (!un && save.gold < c.cost);
       h += `<button class="card ${sel ? 'sel' : ''}" data-act="${un ? 'cls' : 'unlock'}" data-v="${k}" ${dis ? 'disabled' : ''}>
-        <span class="nm">${c.en}</span><span class="ds">${c.th}<br>${c.desc}</span>
+        <span class="nm">${c.en}</span><span class="ds">${c.th}<br>${c.desc}<br>Space: ${c.skill.th}</span>
         <span class="st">HP ${c.hp} · SPD ${c.speed}<br>DMG ${c.dmg} · RATE ${c.rate}</span><span class="act">${act}</span></button>`;
     }
     h += `</div><button class="btn ghost" data-act="reset"><span>${resetArm ? 'กดอีกครั้งเพื่อลบเซฟทั้งหมด' : 'ลบเซฟ เริ่มใหม่หมด'}</span></button>`;
@@ -1056,11 +1128,12 @@ function pick(u) {
   u.apply(); syncBlades();
   S.pending--;
   if (S.pending > 0) openLevel();
-  else { ui.level.hidden = true; mode = 'play'; }
+  else { ui.level.hidden = true; mode = 'play'; blurFocus(); }
 }
+function blurFocus() { const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); }
 function togglePause() {
   if (mode === 'play') { mode = 'pause'; ui.pause.hidden = false; $('resumebtn').focus(); }
-  else if (mode === 'pause') { mode = 'play'; ui.pause.hidden = true; }
+  else if (mode === 'pause') { mode = 'play'; ui.pause.hidden = true; blurFocus(); }
 }
 
 /* ----- scene switching ----- */
@@ -1103,7 +1176,7 @@ function startRun() {
     maxHp: c.hp + 2 * save.up.temple, speed: c.speed, dmg: c.dmg * (1 + .1 * save.up.smith), rate: c.rate,
     multi: 1, pierce: c.weapon === 'arrow' ? 2 : 0, blast: 0, arc: 2.1, reach: 2.1, whirl: 0, swings: 0,
     orbit: 0, magnet: 2.2, regen: 0, atkCd: .3, spawnCd: .5, inv: 0, regAcc: 0, orbitAng: 0, picks: {}, pending: 0,
-    wave: 0, boss: null, won: false, endT: 0, warnBat: false, warnGolem: false, warnBoss: false
+    skillCd: 0, dash: null, wave: 0, boss: null, won: false, endT: 0, warnBat: false, warnGolem: false, warnBoss: false
   };
   S.hp = S.maxHp;
   const got = [];
@@ -1120,7 +1193,9 @@ function startRun() {
   hideScreens();
   ui.thud.hidden = true; ui.prompt.hidden = true; ui.dhud.hidden = false; ui.bossbar.hidden = true;
   ui.floorlbl.textContent = 'FLOOR ' + fl;
-  lastHud = '';
+  lastHud = ''; lastSk = '';
+  lastMove.x = 0; lastMove.z = 1;
+  blurFocus();
   mode = 'play';
   toast('FLOOR ' + fl, floorInfo(fl).th + (got.length ? ' · หอเวทให้: ' + got.join(', ') : ''));
 }
@@ -1189,6 +1264,8 @@ $('homebtn').addEventListener('click', () => { const c = pendingCoins; pendingCo
 $('resumebtn').addEventListener('click', togglePause);
 $('giveupbtn').addEventListener('click', () => { ui.pause.hidden = true; mode = 'play'; endRun(false); });
 $('pausebtn').addEventListener('click', () => { if (mode === 'play' || mode === 'pause') togglePause(); });
+// pointerdown (not click) so it still fires while another finger holds the joystick
+$('skillbtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); useSkill(); });
 ui.prompt.addEventListener('click', () => { if (mode === 'town') interact(); });
 function titleNote() {
   const b = save.best;
@@ -1214,7 +1291,7 @@ function movePlayer(dt, speed, b) {
   pushOut(tmp, .35, curCol);
   player.position.x = tmp.x; player.position.z = tmp.z;
   const moving = ml > .1;
-  if (moving) faceAngle = Math.atan2(mx, mz);
+  if (moving) { faceAngle = Math.atan2(mx, mz); lastMove.x = mx / ml; lastMove.z = mz / ml; }
   let da = faceAngle - player.rotation.y;
   da = Math.atan2(Math.sin(da), Math.cos(da));
   player.rotation.y += da * Math.min(1, dt * 14);
@@ -1245,10 +1322,12 @@ function update(dt) {
     return;
   }
   S.t += dt;
-  movePlayer(dt, S.speed, DB);
+  if (S.skillCd > 0) S.skillCd = Math.max(0, S.skillCd - dt);
+  if (S.dash) dashStep(dt); else movePlayer(dt, S.speed, DB);
   const px = player.position.x, pz = player.position.z;
 
   if (S.inv > 0) { S.inv -= dt; player.visible = S.inv <= 0 || Math.floor(S.inv * 20) % 2 === 0; } else player.visible = true;
+  if (S.dash) player.visible = true;
   if (S.regen > 0 && S.hp < S.maxHp) { S.regAcc += S.regen * dt; if (S.regAcc >= 1) { S.regAcc -= 1; S.hp = Math.min(S.maxHp, S.hp + 1); } }
 
   // attack
@@ -1464,6 +1543,17 @@ function updateFx(dt) {
   if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) ui.toast.classList.remove('on'); }
 }
 
+let lastSk = '';
+function skillUi() {
+  if (!S || cur !== dung) return;
+  const sk = CLS[S.cls].skill, left = S.skillCd, key = sk.id + ':' + Math.ceil(left * 4);
+  if (key === lastSk) return;
+  lastSk = key;
+  ui.skill.classList.toggle('ready', left <= 0);
+  ui.skname.textContent = left > 0 ? Math.ceil(left) : sk.en;
+  ui.skcd.style.height = (left / sk.cd * 100) + '%';
+}
+
 let lastHud = '';
 function hud() {
   if (!S || cur !== dung) return;
@@ -1493,7 +1583,7 @@ function frame() {
   else if (mode === 'town') updateTown(dt);
   else if (mode === 'title') player.rotation.y += dt * .6;
   updateFx(dt);
-  hud();
+  hud(); skillUi();
   camTarget.lerp(player.position, 1 - Math.exp(-dt * 6));
   camTarget.y = 0;
   const lookZ = cur === town ? -2.5 : 0;
@@ -1509,5 +1599,13 @@ function frame() {
   if (post) post.render(cur); else renderer.render(cur, camera);
 }
 frame();
+
+/* test hook: only exists when the page is opened with ?dbg (see CLAUDE.md) */
+if (/[?&]dbg\b/.test(location.search)) window.__dbg = {
+  startRun, useSkill, spawnBoss, addEnemy, save, player, ui, camera,
+  tick(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'play') update(1 / 30); updateFx(1 / 30); } hud(); skillUi(); },
+  setCls(c) { save.cls = c; setHero(c); },
+  get S() { return S; }, get mode() { return mode; }, get nb() { return bullets.length; }, get enemies() { return enemies; }
+};
 })();
 </script>
