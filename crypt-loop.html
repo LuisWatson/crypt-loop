@@ -53,6 +53,15 @@ body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);
 .prompt span{font-family:var(--f-body);font-size:15px}
 
 .hurt{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,var(--hp) 130%)}
+.opts{display:flex;flex-direction:column;gap:14px;text-align:left}
+.opt{display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer}
+.opt small{display:block;font-size:12px;color:var(--dim)}
+.opt input[type=checkbox]{width:22px;height:22px;accent-color:var(--xp);flex:none;margin:0}
+.opt.rng{justify-content:space-between}
+.opt.rng span{flex:0 0 7.5em}
+.opt input[type=range]{flex:1;min-width:0;accent-color:var(--xp)}
+.opt input:focus-visible{outline:3px solid var(--xp);outline-offset:3px}
+.fps{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-family:var(--f-pixel);font-size:11px;color:var(--dim);text-shadow:2px 2px 0 var(--shadow);pointer-events:none}
 .dmg{position:absolute;left:0;top:0;opacity:0;transform:translate(-50%,-50%);font-family:var(--f-pixel);font-size:14px;color:#fff;text-shadow:2px 2px 0 var(--shadow);white-space:nowrap;will-change:transform,opacity}
 .dmg.kill{color:var(--gold);font-size:19px}
 .dmg.hurt{color:var(--hp);font-size:22px}
@@ -142,7 +151,7 @@ h2{font-family:var(--f-pixel);font-size:26px;margin:0;color:var(--xp);text-shado
     <div class="row">
       <div class="col"><div>GOLD <span class="gold" id="goldtxt">0</span></div><div class="small" id="clstxt">MAGE</div></div>
       <div class="col c"><div>TOWN</div><div class="small" id="depthtxt">ลึกสุด: ชั้น 1</div></div>
-      <div class="right"><span class="small">WASD เดิน · E ใช้</span></div>
+      <div class="right"><span class="small">WASD เดิน · E ใช้</span><button class="hudbtn" id="settingsbtn-town" type="button" aria-label="ตั้งค่า">SET</button></div>
     </div>
   </div>
   <button class="prompt" id="prompt" hidden></button>
@@ -162,6 +171,7 @@ h2{font-family:var(--f-pixel);font-size:26px;margin:0;color:var(--xp);text-shado
         <b>P / ESC</b><span>พักเกม</span>
       </div>
       <button class="btn" id="enterbtn"><span>เข้าเมือง</span></button>
+      <button class="btn ghost" id="settingsbtn-title" type="button"><span>ตั้งค่า</span></button>
       <p class="note" id="titlenote"></p>
     </div>
   </div>
@@ -181,11 +191,27 @@ h2{font-family:var(--f-pixel);font-size:26px;margin:0;color:var(--xp);text-shado
       <h2>PAUSED</h2>
       <div class="btns">
         <button class="btn" id="resumebtn"><span>เล่นต่อ</span></button>
+        <button class="btn ghost" id="settingsbtn-pause" type="button"><span>ตั้งค่า</span></button>
         <button class="btn ghost" id="giveupbtn"><span>ยอมแพ้ กลับเมือง</span></button>
       </div>
       <p class="note">ยอมแพ้แล้วยังได้ทองตามที่ทำได้ในรอบนี้</p>
     </div>
   </div>
+
+  <div class="screen" id="settings" hidden>
+    <div class="panel">
+      <h2>SETTINGS</h2>
+      <div class="opts">
+        <label class="opt" id="row-fx"><input type="checkbox" id="set-fx"><span>เอฟเฟกต์ภาพ<small>เส้นขอบ + แสงเรือง (ปิดถ้าเกมกระตุก)</small></span></label>
+        <label class="opt"><input type="checkbox" id="set-fps"><span>แสดง FPS<small>ไว้เช็คความลื่น โดยเฉพาะบนมือถือ</small></span></label>
+        <label class="opt rng"><span>เสียงรวม</span><input type="range" id="set-master" min="0" max="100" step="5"></label>
+        <label class="opt rng"><span>เพลง</span><input type="range" id="set-music" min="0" max="100" step="5"></label>
+        <label class="opt rng"><span>เสียงเอฟเฟกต์</span><input type="range" id="set-sfx" min="0" max="100" step="5"></label>
+      </div>
+      <button class="btn" id="setclose" type="button"><span>ปิด (Esc)</span></button>
+    </div>
+  </div>
+  <div class="fps" id="fps" hidden></div>
 
   <div class="screen" id="summary" hidden>
     <div class="panel">
@@ -222,6 +248,12 @@ function loadSave() {
 }
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 let save = loadSave();
+
+// settings live under their own key so "ลบเซฟ" (reset save) does not wipe them
+const SETTINGS_KEY = 'crypt-loop-settings-v1';
+const settings = Object.assign({ fx: true, fps: false, master: .7, music: .6, sfx: .9 },
+  (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } })());
+function persistSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
 
 /* ================= renderer ================= */
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -350,8 +382,15 @@ const geoCache = {};
 const G = (w, h, d) => geoCache[w + '|' + h + '|' + d] || (geoCache[w + '|' + h + '|' + d] = new THREE.BoxGeometry(w, h, d));
 const L = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0 });
 const B = c => new THREE.MeshBasicMaterial({ color: c });
-// HDR colour above 1.0: picked up by the bloom pass, hue kept by the final tonemap
-const GLOW = (c, k = 2.2) => { const m = B(c); m.color.multiplyScalar(k); return m; };
+// HDR colour above 1.0: picked up by the bloom pass, hue kept by the final tonemap.
+// Without post-processing a channel above 1 just clamps and the hue washes out to white,
+// so every glow material is registered and rescaled to its base colour when effects are off.
+let fxOn = !!post && settings.fx;
+const glowMats = [];
+function applyGlow(m) { const g = m.userData.glow; m.color.copy(g.base).multiplyScalar(fxOn ? g.k : 1); }
+function glow(m, k) { m.userData.glow = { base: m.color.clone(), k }; glowMats.push(m); applyGlow(m); return m; }
+const GLOW = (c, k = 2.2) => glow(B(c), k);
+function setFx(on) { fxOn = !!post && on; for (const m of glowMats) applyGlow(m); }
 function box(w, h, d, m, x, y, z, shadow = true) {
   const o = new THREE.Mesh(G(w, h, d), m);
   o.position.set(x, y, z); o.castShadow = shadow; o.receiveShadow = true;
@@ -732,7 +771,7 @@ let portalFx;
   for (const sx of [-1.1, 1.1]) { town.add(box(.6, 2.6, .6, M.stone, px + sx, 1.3, pz)); townCol.push({ x: px + sx, z: pz, hx: .35, hz: .35 }); }
   town.add(box(2.9, .5, .7, M.stone2, px, 2.85, pz));
   const pm = new THREE.MeshBasicMaterial({ color: 0x9a5cff, transparent: true, opacity: .85, side: THREE.DoubleSide });
-  pm.color.multiplyScalar(2);
+  glow(pm, 2);
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.5), pm);
   plane.position.set(px, 1.35, pz); town.add(plane);
   townCol.push({ x: px, z: pz, hx: .8, hz: .15 });
@@ -1039,7 +1078,7 @@ function swing() {
   }
   const geo = new THREE.RingGeometry(.45, S.reach, full ? 32 : 14, 1, -arc / 2, arc);
   const mat = new THREE.MeshBasicMaterial({ color: full ? 0xffe08a : 0xfff2d0, transparent: true, opacity: .75, side: THREE.DoubleSide });
-  mat.color.multiplyScalar(1.5);
+  if (fxOn) mat.color.multiplyScalar(1.5);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
   const g = new THREE.Group();
@@ -1121,9 +1160,12 @@ const lastMove = { x: 0, z: 1 };
 const joy = { id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (k.startsWith('arrow') || k === ' ') e.preventDefault();
+  // sliders and checkboxes in Settings need their own arrow/Space handling
+  const inInput = e.target && e.target.tagName === 'INPUT';
+  if (!inInput && (k.startsWith('arrow') || k === ' ')) e.preventDefault();
   if (e.repeat) { keys.add(k); return; }
   keys.add(k);
+  if (k === 'escape' && mode === 'settings') { closeSettings(); return; }
   if (k === ' ') { if (mode === 'play') useSkill(); return; }
   if ((k === 'p' || k === 'escape') && (mode === 'play' || mode === 'pause')) togglePause();
   else if (k === 'escape' && mode === 'shop') closeShop();
@@ -1171,7 +1213,7 @@ host.addEventListener('pointercancel', endJoy);
 const ui = {
   xp: $('xpfill'), hp: $('hpfill'), hpT: $('hptext'), lvl: $('lvl'), time: $('time'), kills: $('kills'), floorlbl: $('floorlbl'),
   bossbar: $('bossbar'), bossfill: $('bossfill'), hurt: $('hurt'), toast: $('toast'),
-  skill: $('skillbtn'), skcd: $('skcd'), skname: $('skname'),
+  skill: $('skillbtn'), skcd: $('skcd'), skname: $('skname'), settings: $('settings'), fps: $('fps'),
   dhud: $('dhud'), thud: $('thud'), gold: $('goldtxt'), clstxt: $('clstxt'), depthtxt: $('depthtxt'), prompt: $('prompt'), labels: $('labels'),
   title: $('title'), shop: $('shop'), shopbody: $('shopbody'), level: $('level'), pause: $('pause'), summary: $('summary'), cards: $('cards')
 };
@@ -1482,6 +1524,44 @@ $('giveupbtn').addEventListener('click', () => { ui.pause.hidden = true; mode = 
 $('pausebtn').addEventListener('click', () => { if (mode === 'play' || mode === 'pause') togglePause(); });
 // pointerdown (not click) so it still fires while another finger holds the joystick
 $('skillbtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); useSkill(); });
+
+/* ----- settings ----- */
+let settingsBack = 'title';
+function applySettings() {
+  setFx(settings.fx);
+  ui.fps.hidden = !settings.fps;
+  audio.setVol('master', settings.master); audio.setVol('music', settings.music); audio.setVol('sfx', settings.sfx);
+}
+function syncSettingsUi() {
+  $('row-fx').hidden = !post; // WebGL1 devices have no post-processing path
+  $('set-fx').checked = settings.fx;
+  $('set-fps').checked = settings.fps;
+  $('set-master').value = Math.round(settings.master * 100);
+  $('set-music').value = Math.round(settings.music * 100);
+  $('set-sfx').value = Math.round(settings.sfx * 100);
+}
+function openSettings() {
+  if (mode === 'settings') return;
+  settingsBack = mode; mode = 'settings';
+  keys.clear(); resetJoy(); ui.prompt.hidden = true;
+  syncSettingsUi();
+  ui.settings.hidden = false;
+  $('setclose').focus();
+}
+function closeSettings() { ui.settings.hidden = true; mode = settingsBack; blurFocus(); }
+ui.settings.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'set-fx') settings.fx = e.target.checked;
+  else if (id === 'set-fps') settings.fps = e.target.checked;
+  else if (id === 'set-master') settings.master = e.target.value / 100;
+  else if (id === 'set-music') settings.music = e.target.value / 100;
+  else if (id === 'set-sfx') settings.sfx = e.target.value / 100;
+  else return;
+  applySettings(); persistSettings();
+});
+ui.settings.addEventListener('change', e => { if (e.target.id === 'set-sfx') audio.play('coin'); });
+for (const id of ['settingsbtn-title', 'settingsbtn-town', 'settingsbtn-pause']) $(id).addEventListener('click', openSettings);
+$('setclose').addEventListener('click', closeSettings);
 ui.prompt.addEventListener('click', () => { if (mode === 'town') interact(); });
 function titleNote() {
   const b = save.best;
@@ -1490,6 +1570,7 @@ function titleNote() {
     : 'เซฟอยู่ในเบราว์เซอร์นี้ ปิดแล้วเปิดใหม่ ของยังอยู่';
 }
 titleNote();
+applySettings();
 
 /* ================= update ================= */
 const tmp = { x: 0, z: 0 };
@@ -1807,13 +1888,21 @@ function hud() {
 
 /* ================= loop ================= */
 const clock = new THREE.Clock();
+let fpsN = 0, fpsT = 0;
 setHero(save.cls);
 town.add(player);
 player.position.set(0, 0, 3.5);
 camTarget.set(0, 0, 3.5);
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), .05);
+  const raw = clock.getDelta(), dt = Math.min(raw, .05);
+  if (settings.fps) {
+    fpsN++; fpsT += raw;
+    if (fpsT >= .5) {
+      ui.fps.textContent = Math.round(fpsN / fpsT) + ' FPS · ' + renderer.domElement.width + 'x' + renderer.domElement.height + (fxOn ? ' · FX' : '');
+      fpsN = 0; fpsT = 0;
+    }
+  }
   let fdt = dt;
   if (mode === 'play') {
     if (hitStop > 0) { hitStop -= dt; fdt = dt * .2; } // hit-stop: freeze the simulation, effects crawl
@@ -1834,7 +1923,13 @@ function frame() {
   }
   camera.lookAt(camTarget.x, .5, camTarget.z + lookZ);
   updateLabels();
-  if (post) post.render(cur); else renderer.render(cur, camera);
+  if (post && fxOn) post.render(cur);
+  else {
+    // post.render() turned shadowMap.autoUpdate off, so request the shadow pass by hand
+    renderer.shadowMap.needsUpdate = true;
+    renderer.setRenderTarget(null);
+    renderer.render(cur, camera);
+  }
 }
 frame();
 
@@ -1844,7 +1939,8 @@ if (/[?&]dbg\b/.test(location.search)) window.__dbg = {
   tick(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'play') update(1 / 30); updateFx(1 / 30); } hud(); skillUi(); },
   setCls(c) { save.cls = c; setHero(c); },
   get S() { return S; }, get mode() { return mode; }, get nb() { return bullets.length; }, get enemies() { return enemies; },
-  get dying() { return dying.length; }, get hitStop() { return hitStop; }, get sceneKids() { return cur.children.length; }
+  get dying() { return dying.length; }, get hitStop() { return hitStop; }, get sceneKids() { return cur.children.length; },
+  settings, glowMats, get fxOn() { return fxOn; }, get hasPost() { return !!post; }
 };
 })();
 </script>
