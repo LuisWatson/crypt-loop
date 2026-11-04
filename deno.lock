@@ -1,0 +1,40 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:pixelmatch@^7.2.0": "7.2.0",
+    "npm:playwright@*": "1.64.1",
+    "npm:playwright@^1.62.0": "1.64.1",
+    "npm:pngjs@7": "7.0.0"
+  },
+  "npm": {
+    "pixelmatch@7.2.0": {
+      "integrity": "sha512-xhcb4yHu9sM/G7foGzoLtXYcC0zHEaOXXjRKhGup0fw78Nf2Tkiapv4EQyMzrbcmQPsllAI7DbFY2UT7PlI9Pg==",
+      "dependencies": [
+        "pngjs"
+      ],
+      "bin": true
+    },
+    "playwright-core@1.64.1": {
+      "integrity": "sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==",
+      "bin": true
+    },
+    "playwright@1.64.1": {
+      "integrity": "sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==",
+      "dependencies": [
+        "playwright-core"
+      ],
+      "bin": true
+    },
+    "pngjs@7.0.0": {
+      "integrity": "sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@std/assert@^1.0.19",
+      "npm:pixelmatch@^7.2.0",
+      "npm:playwright@^1.62.0",
+      "npm:pngjs@7"
+    ]
+  }
+}
