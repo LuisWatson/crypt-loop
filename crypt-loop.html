@@ -1942,5 +1942,10 @@ if (/[?&]dbg\b/.test(location.search)) window.__dbg = {
   get dying() { return dying.length; }, get hitStop() { return hitStop; }, get sceneKids() { return cur.children.length; },
   settings, glowMats, get fxOn() { return fxOn; }, get hasPost() { return !!post; }
 };
+/* parallax-threejs devtools look for these globals; scene is a getter because cur switches between town and dung */
+if (window.__dbg) {
+  Object.defineProperty(window, 'scene', { get() { return cur; } });
+  window.__renderer__ = renderer;
+}
 })();
 </script>
